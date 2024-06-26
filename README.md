@@ -4,8 +4,6 @@
 
 ## Installation
 
-You can install the `simBgms` package from GitHub using the `devtools` package:
-
 ```R
 if (!requireNamespace("remotes")) { 
   install.packages("remotes")   

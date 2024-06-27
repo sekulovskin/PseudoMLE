@@ -14,14 +14,14 @@ double log_pseudolikelihood(NumericMatrix interactions,
   double denominator = 0.0;
   double exponent = 0.0;
   int score = 0;
-  
+
   //Contributions of the full-conditional of nodes (pseudolikelihoods) ---------
   for(int s = 0; s <  no_nodes; s++) {
     //Numerator of full-conditional of node s (pseudolikelihood) ---------------
     for(int person = 0; person < no_persons; person++) {
       rest_score = 0.0;
       for(int node = 0; node < no_nodes; node++) {
-        rest_score += observations(person, node) * interactions(node, s);  
+        rest_score += observations(person, node) * interactions(node, s);
       }
       log_pseudolikelihood += observations(person,s) * rest_score;
       bound = no_categories[s] * rest_score;
@@ -32,8 +32,8 @@ double log_pseudolikelihood(NumericMatrix interactions,
           log_pseudolikelihood += thresholds(s, category);
         }
         score = category + 1;
-        exponent = thresholds(s, category) + 
-          score * rest_score - 
+        exponent = thresholds(s, category) +
+          score * rest_score -
           bound;
         denominator += std::exp(exponent);
       }
@@ -58,23 +58,23 @@ double log_unnormalized_pseudoposterior_normal(NumericMatrix interactions,
                                                 thresholds,
                                                 observations,
                                                 no_categories);
-  
+
   //Contribution of the prior densities (interactions) -------------------------
   for(int s = 0; s < no_nodes - 1; s++) {
     for(int t = s + 1; t < no_nodes; t++) {
-        unn_pseudo_post += R::dnorm(interactions(s, t), 
-                            0.0, 
-                            std::sqrt(interaction_var(s, t)), 
+        unn_pseudo_post += R::dnorm(interactions(s, t),
+                            0.0,
+                            std::sqrt(interaction_var(s, t)),
                             true);
     }
   }
-  
+
   //Contribution of the prior densities (thresholds) ---------------------------
   for(int s = 0; s < no_nodes; s++) {
     for(int category = 0; category < no_categories[s]; category++) {
       unn_pseudo_post -= R::lbeta(threshold_alpha, threshold_beta);
       unn_pseudo_post += threshold_alpha * thresholds(s, category);
-      unn_pseudo_post -= (threshold_alpha + threshold_beta) * 
+      unn_pseudo_post -= (threshold_alpha + threshold_beta) *
         std::log(1 + std::exp(thresholds(s, category)));
     }
   }
@@ -94,23 +94,23 @@ double log_unnormalized_pseudoposterior_cauchy(NumericMatrix interactions,
                                                 thresholds,
                                                 observations,
                                                 no_categories);
-  
+
   //Contribution of the prior densities (interactions) -------------------------
   for(int s = 0; s < no_nodes - 1; s++) {
     for(int t = s + 1; t < no_nodes; t++) {
-      unn_pseudo_post += R::dcauchy(interactions(s, t), 
-                            0.0, 
-                            cauchy_scale, 
+      unn_pseudo_post += R::dcauchy(interactions(s, t),
+                            0.0,
+                            cauchy_scale,
                             true);
     }
   }
-  
+
   //Contribution of the prior densities (thresholds) ---------------------------
   for(int s = 0; s < no_nodes; s++) {
     for(int category = 0; category < no_categories[s]; category++) {
       unn_pseudo_post -= R::lbeta(threshold_alpha, threshold_beta);
       unn_pseudo_post += threshold_alpha * thresholds(s, category);
-      unn_pseudo_post -= (threshold_alpha + threshold_beta) * 
+      unn_pseudo_post -= (threshold_alpha + threshold_beta) *
         std::log(1 + std::exp(thresholds(s, category)));
     }
   }
@@ -138,34 +138,34 @@ double emvs_log_unnormalized_pseudoposterior(NumericMatrix interactions,
                                          thresholds,
                                          observations,
                                          no_categories);
-  
+
   //Contribution of the prior densities (interactions) -------------------------
   for(int s = 0; s < no_nodes - 1; s++) {
     for(int t = s + 1; t < no_nodes; t++) {
       unn_pseudo_post += std::log(
-        theta * R::dnorm(interactions(s, t), 
-                         0.0, 
-                         std::sqrt(slab_var(s, t)), 
-                         false) + 
-                           (1 - theta) * R::dnorm(interactions(s, t), 
-                            0.0, 
-                            std::sqrt(slab_var(s, t) * xi / no_persons), 
+        theta * R::dnorm(interactions(s, t),
+                         0.0,
+                         std::sqrt(slab_var(s, t)),
+                         false) +
+                           (1 - theta) * R::dnorm(interactions(s, t),
+                            0.0,
+                            std::sqrt(slab_var(s, t) * xi / no_persons),
                             false));
     }
   }
-  
+
   //Contribution of the prior densities (thresholds) ---------------------------
   for(int s = 0; s < no_nodes; s++) {
     for(int category = 0; category < no_categories[s]; category++) {
       unn_pseudo_post -= R::lbeta(threshold_alpha, threshold_beta);
       unn_pseudo_post += threshold_alpha * thresholds(s, category);
-      unn_pseudo_post -= (threshold_alpha + threshold_beta) * 
+      unn_pseudo_post -= (threshold_alpha + threshold_beta) *
         std::log(1 + std::exp(thresholds(s, category)));
     }
   }
-  
+
   if(hierarchical == true)
     unn_pseudo_post += R::dbeta(theta, indicator_alpha, indicator_beta, true);
-  
+
   return unn_pseudo_post;
 }

@@ -47,16 +47,17 @@ mple_G = function(x,
                   thresholds,
                   interactions,
                   G) {
-  #Check data input ------------------------------------------------------------
-  if(!inherits(x, what = "matrix"))
-    stop("The input x is supposed to be a matrix.")
-
+  # Check data input ------------------------------------------------------------
+  if(!inherits(x, what = "matrix") && !inherits(x, what = "data.frame"))
+    stop("The input x needs to be a matrix or dataframe.")
+  if(inherits(x, what = "data.frame"))
+    x = data.matrix(x)
   if(ncol(x) < 2)
     stop("The matrix x should have more than one variable (columns).")
   if(nrow(x) < 2)
     stop("The matrix x should have more than one observation (rows).")
 
-  #Format the data input -------------------------------------------------------
+  # Format the data input -------------------------------------------------------
   data = reformat_data(x = x)
   x = data$x
   no_categories = data$no_categories
@@ -65,7 +66,7 @@ mple_G = function(x,
   no_thresholds = sum(no_categories)
   no_parameters = no_thresholds + no_interactions
 
-  #Check NR input --------------------------------------------------------------
+  # Check NR input --------------------------------------------------------------
   if(convergence_criterion <= 0)
     stop("Parameter ``convergence_criterion'' needs to be positive.")
   if(maximum_iterations <= 0 ||
@@ -85,48 +86,40 @@ mple_G = function(x,
                           ncol = no_nodes)
   }
 
+  # UPDATE: Create the mask vector v based on G  -------------------------------
+  v = c(rep(1, no_thresholds), G[lower.tri(G)])
+
   # Newton-Raphson ------------------------------------------------------------
   log_pl = log_pseudolikelihood(interactions * G,
                                 thresholds,
                                 observations = x,
                                 no_categories)
 
-  row = rep(1, no_nodes * (no_nodes - 1) / 2)
-  cntr = 0
-  for(s in 1:(no_nodes-1)) {
-    for(t in (s+1):no_nodes) {
-      cntr = cntr + 1
-      if(G[s, t] == 0) {
-        row[cntr] = 0
-      }
-    }
-  }
-
   hessian = matrix(data = NA,
-                   nrow = no_parameters - length(which(row == 0)),
-                   ncol = no_parameters - length(which(row == 0)))
-
+                   nrow = no_parameters,
+                   ncol = no_parameters)
   gradient = matrix(data = NA,
                     nrow = 1,
-                    ncol = no_parameters - length(which(row == 0)))
+                    ncol = no_parameters)
 
   for(iteration in 1:maximum_iterations) {
     old_log_pl = log_pl
 
-    #Compute gradient vector (first order derivatives) ------------------------
+    # Compute gradient vector (first order derivatives) ------------------------
     gradient[1:no_thresholds] =
       gradient_thresholds_pseudolikelihood(interactions = G * interactions,
                                            thresholds = thresholds,
                                            observations = x,
                                            no_categories)
-    tmp =
+    gradient[-c(1:no_thresholds)] =
       gradient_interactions_pseudolikelihood(interactions = G * interactions,
                                              thresholds = thresholds,
                                              observations = x,
                                              no_categories)
-    tmp = tmp[-which(row == 0)]
 
-    gradient[-c(1:no_thresholds)] = tmp
+    # UPDATE: Apply the adjacency mask to the gradient -------------------------
+    gradient = gradient * matrix(v, nrow = 1)
+
     # Compute Hessian matrix (second order partial derivatives) ---------------
     hessian[1:no_thresholds, 1:no_thresholds] =
       hessian_thresholds_pseudolikelihood(interactions = G * interactions,
@@ -134,32 +127,26 @@ mple_G = function(x,
                                           observations = x,
                                           no_categories)
 
-    tmp =  hessian_interactions_pseudolikelihood(interactions = G * interactions,
-                                                 thresholds = thresholds,
-                                                 observations = x,
-                                                 no_categories)
-    tmp = tmp[-which(row == 0),]
-    tmp = tmp[, -which(row == 0)]
+    hessian[-(1:no_thresholds), -(1:no_thresholds)] =
+      hessian_interactions_pseudolikelihood(interactions = G * interactions,
+                                            thresholds = thresholds,
+                                            observations = x,
+                                            no_categories)
 
-
-
-
-    hessian[-(1:no_thresholds), -(1:no_thresholds)] = tmp
-
-
-    tmp = hessian_crossparameters(interactions = G * interactions,
-                                  thresholds = thresholds,
-                                  observations = x,
-                                  no_categories)
-    tmp = tmp[-which(row == 0),]
-
-    hessian[-(1:no_thresholds), 1:no_thresholds] = tmp
+    hessian[-(1:no_thresholds), 1:no_thresholds] =
+      hessian_crossparameters(interactions = G * interactions,
+                              thresholds = thresholds,
+                              observations = x,
+                              no_categories)
 
     hessian[1:no_thresholds, -(1:no_thresholds)] =
       t(hessian[-(1:no_thresholds), 1:no_thresholds])
 
+    # Apply the adjacency mask to the Hessian
+    hessian = hessian * (matrix(v, ncol = 1) %*% matrix(v, nrow = 1))
+
     # Update parameter values (Newton-Raphson step) ---------------------------
-    Delta = gradient %*% solve(hessian)
+    Delta = gradient %*% solve(hessian + diag(1e-6, nrow(hessian))) # issue arises here!!!!!
     if(any(is.nan(Delta)) || any(is.infinite(Delta)))
       stop("log_pseudolikelihood optimization failed. Please check the data. If the data checks out, please try different starting values.")
 
@@ -172,8 +159,8 @@ mple_G = function(x,
     }
     for(node in 1:(no_nodes - 1)) {
       for(node_2 in (node + 1):no_nodes) {
-        if(G[node, node_2] != 0) {
-          cntr = cntr + 1
+        cntr = cntr + 1
+        if(G[node, node_2] == 1) {  # Ensure updates only for allowed interactions
           interactions[node, node_2] = interactions[node, node_2] - Delta[cntr]
           interactions[node_2, node] = interactions[node, node_2]
         }
@@ -192,15 +179,24 @@ mple_G = function(x,
 
   if(abs(log_pl - old_log_pl) >= convergence_criterion &&
      iteration == maximum_iterations)
-    warning(paste("The optimization procedure did not convergence in",
+    warning(paste("The optimization procedure did not converge in",
                   maximum_iterations, "iterations.",
                   sep = " "),
             call. = FALSE)
 
-  colnames(interactions) = paste0("node ", 1:no_nodes)
-  rownames(interactions) = paste0("node ", 1:no_nodes)
+  # Preparing the output --------------------------------------------------------
+  if(is.null(colnames(x))){
+    data_columnnames = paste0("node ", 1:no_nodes)
+    colnames(interactions) = data_columnnames
+    rownames(interactions) = data_columnnames
+    rownames(thresholds) = data_columnnames
+  } else {
+    data_columnnames <- colnames(x)
+    colnames(interactions) = data_columnnames
+    rownames(interactions) = data_columnnames
+    rownames(thresholds) = data_columnnames
+  }
   colnames(thresholds) = paste0("category ", 1:max(no_categories))
-  rownames(thresholds) = paste0("node ", 1:no_nodes)
 
   return(list(interactions = interactions, thresholds = thresholds))
 }

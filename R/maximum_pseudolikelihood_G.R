@@ -138,8 +138,9 @@ mple_G = function(x,
                                                  thresholds = thresholds,
                                                  observations = x,
                                                  no_categories)
-    tmp = tmp[-which(row == 0),]
-    tmp = tmp[, -which(row == 0)]
+    
+    tmp = tmp[-which(row == 0),, drop = FALSE]
+    tmp = tmp[, -which(row == 0), drop = FALSE]
 
 
 

@@ -101,6 +101,9 @@ mple_G = function(x,
       }
     }
   }
+  # Logical index of the estimated interactions. Indexing with
+  # -which(row == 0) selects nothing when G is complete (no zeros).
+  keep = row == 1
 
   hessian = matrix(data = NA,
                    nrow = no_parameters - length(which(row == 0)),
@@ -124,7 +127,7 @@ mple_G = function(x,
                                              thresholds = thresholds,
                                              observations = x,
                                              no_categories)
-    tmp = tmp[-which(row == 0)]
+    tmp = tmp[keep]
 
     gradient[-c(1:no_thresholds)] = tmp
     # Compute Hessian matrix (second order partial derivatives) ---------------
@@ -139,8 +142,7 @@ mple_G = function(x,
                                                  observations = x,
                                                  no_categories)
     
-    tmp = tmp[-which(row == 0),, drop = FALSE]
-    tmp = tmp[, -which(row == 0), drop = FALSE]
+    tmp = tmp[keep, keep, drop = FALSE]
 
 
 
@@ -152,7 +154,7 @@ mple_G = function(x,
                                   thresholds = thresholds,
                                   observations = x,
                                   no_categories)
-    tmp = tmp[-which(row == 0),]
+    tmp = tmp[keep, , drop = FALSE]
 
     hessian[-(1:no_thresholds), 1:no_thresholds] = tmp
 
